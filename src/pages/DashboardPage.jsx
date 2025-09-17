@@ -1,16 +1,31 @@
-import React, { useMemo, useState } from 'react'
-import { Grid, Paper, Typography, Divider, Table, TableHead, TableRow, TableCell, TableBody, Stack, TextField, Button, Alert, MenuItem } from '@mui/material'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Grid, Paper, Typography, Divider, Table, TableHead, TableRow, TableCell, TableBody, Stack, TextField, Button, Alert, MenuItem, Snackbar, Chip } from '@mui/material'
 import MapComponent from '../components/visualizations/MapComponent.jsx'
 import ProfileChart from '../components/visualizations/ProfileChart.jsx'
+import ChatInterface from '../components/chat/ChatInterface.jsx'
 import { useArgoProfiles } from '../hooks/useDataQuery.js'
 import { api } from '../services/api.js'
 import { useQuery } from '@tanstack/react-query'
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const toRad = (v) => (v * Math.PI) / 180
+  const R = 6371
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return R * c
+}
 
 export default function DashboardPage() {
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [region, setRegion] = useState('')
   const [limit, setLimit] = useState(200)
+  const [selectedId, setSelectedId] = useState(null)
+  const [errorOpen, setErrorOpen] = useState(false)
+  const tableRef = useRef(null)
+
   // Fetch profiles within broad bounds
   const filterParams = useMemo(() => {
     const p = { lat_min: -90, lat_max: 90, lon_min: -180, lon_max: 180, limit }
@@ -26,11 +41,39 @@ export default function DashboardPage() {
     staleTime: 60_000
   })
 
+  useEffect(() => { if (isError) setErrorOpen(true) }, [isError])
+
+  const selectedProfile = useMemo(() => profiles.find(p => p.id === selectedId) || null, [profiles, selectedId])
+
   // Map requires lat/lon keys named lat/lon
   const mapData = useMemo(() => {
     if (!profiles.length) return []
-    return profiles.map(p => ({ id: `${p.platform_number}-${p.cycle_number}`, lat: p.latitude, lon: p.longitude }))
+    return profiles.map(p => ({ id: `${p.platform_number}-${p.cycle_number}`, lat: p.latitude, lon: p.longitude, pid: p.id }))
   }, [profiles])
+
+  const handleFloatSelect = (floatKey) => {
+    // floatKey is platform-cycle; find matching profile by closest platform/cycle
+    const [platform, cycle] = String(floatKey).split('-')
+    const found = profiles.find(p => p.platform_number === platform && String(p.cycle_number) === cycle)
+    if (found) setSelectedId(found.id)
+  }
+
+  const handleMapClick = (latlng) => {
+    if (!profiles.length) return
+    let best = null
+    let bestD = Infinity
+    for (const p of profiles) {
+      const d = haversine(latlng.lat, latlng.lng, p.latitude, p.longitude)
+      if (d < bestD) { bestD = d; best = p }
+    }
+    if (best) setSelectedId(best.id)
+  }
+
+  useEffect(() => {
+    if (!selectedId || !tableRef.current) return
+    const row = tableRef.current.querySelector(`[data-rowid="${selectedId}"]`)
+    if (row && row.scrollIntoView) row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [selectedId])
 
   const dummyProfile = {
     depth: [0, 50, 100, 200, 500, 1000],
@@ -41,14 +84,14 @@ export default function DashboardPage() {
   return (
     <Grid container spacing={2}>
       <Grid item xs={12}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={1}>
           <div>
             <Typography variant="h5">Interactive Dashboard</Typography>
             <Typography variant="body2" color="text.secondary">
               {isLoading ? 'Loading profiles…' : `Profiles: ${profiles.length}${stats ? ` • Total profiles: ${stats.profiles} • Floats: ${stats.floats}` : ''}`}
             </Typography>
           </div>
-          <Stack direction="row" spacing={1}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ width: { xs: '100%', md: 'auto' } }}>
             <TextField size="small" type="date" label="Start" InputLabelProps={{ shrink: true }} value={start} onChange={(e)=>setStart(e.target.value)} />
             <TextField size="small" type="date" label="End" InputLabelProps={{ shrink: true }} value={end} onChange={(e)=>setEnd(e.target.value)} />
             <TextField size="small" select label="Region" value={region} onChange={(e)=>setRegion(e.target.value)} sx={{ minWidth: 180 }}>
@@ -80,55 +123,79 @@ export default function DashboardPage() {
         </Stack>
         {isError && <Alert severity="error" sx={{ mt: 1 }}>Failed to load profiles.</Alert>}
       </Grid>
-      <Grid item xs={12} md={6}>
+
+      {/* Left: Map; Right: Chat (on md+). On mobile, stack. */}
+      <Grid item xs={12} md={7}>
         <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle1" gutterBottom>Float locations</Typography>
           <Divider sx={{ mb: 1 }} />
-          <MapComponent data={mapData} selectedVariable="temperature" onFloatSelect={(id)=>console.log('float', id)} />
+          <MapComponent data={mapData} selectedVariable="temperature" onFloatSelect={handleFloatSelect} onMapClick={handleMapClick} />
         </Paper>
       </Grid>
+      <Grid item xs={12} md={5}>
+        <ChatInterface />
+      </Grid>
+
       <Grid item xs={12} md={6}>
         <Paper sx={{ p: 2 }}>
-          <Typography variant="subtitle1" gutterBottom>Sample profile (placeholder)</Typography>
-          <Divider sx={{ mb: 1 }} />
-          <ProfileChart data={dummyProfile} variable="temperature" showDepth={true} />
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Typography variant="subtitle1">Profile preview</Typography>
+            {selectedProfile && (
+              <Chip size="small" label={`${selectedProfile.platform_number} • Cycle ${selectedProfile.cycle_number}`} />
+            )}
+          </Stack>
+          <Divider sx={{ mb: 1, mt: 1 }} />
+          {!selectedProfile ? (
+            <Typography variant="body2" color="text.secondary">Select a point on the map to preview a profile.</Typography>
+          ) : (
+            // For P0 we still use the placeholder chart; metadata is shown above.
+            <ProfileChart data={dummyProfile} variable="temperature" showDepth={true} />
+          )}
         </Paper>
       </Grid>
-      <Grid item xs={12}>
+
+      <Grid item xs={12} md={6}>
         <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle1" gutterBottom>Recent profiles</Typography>
           <Divider sx={{ mb: 1 }} />
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Platform</TableCell>
-                <TableCell>Cycle</TableCell>
-                <TableCell>Region</TableCell>
-                <TableCell>Latitude</TableCell>
-                <TableCell>Longitude</TableCell>
-                <TableCell>Date</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(profiles || []).slice(0, 10).map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>{p.platform_number}</TableCell>
-                  <TableCell>{p.cycle_number}</TableCell>
-                  <TableCell>{p.ocean_region || '-'}</TableCell>
-                  <TableCell>{p.latitude.toFixed(2)}</TableCell>
-                  <TableCell>{p.longitude.toFixed(2)}</TableCell>
-                  <TableCell>{p.profile_date ? new Date(p.profile_date).toLocaleDateString() : '-'}</TableCell>
-                </TableRow>
-              ))}
-              {!profiles?.length && (
+          <div ref={tableRef} style={{ maxHeight: 360, overflowY: 'auto' }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={6}>No profiles found. Try seeding the database.</TableCell>
+                  <TableCell>Platform</TableCell>
+                  <TableCell>Cycle</TableCell>
+                  <TableCell>Region</TableCell>
+                  <TableCell>Latitude</TableCell>
+                  <TableCell>Longitude</TableCell>
+                  <TableCell>Date</TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {(profiles || []).slice(0, 200).map((p) => {
+                  const selected = p.id === selectedId
+                  return (
+                    <TableRow key={p.id} data-rowid={p.id} hover selected={selected} onClick={() => setSelectedId(p.id)} sx={{ cursor: 'pointer' }}>
+                      <TableCell>{p.platform_number}</TableCell>
+                      <TableCell>{p.cycle_number}</TableCell>
+                      <TableCell>{p.ocean_region || '-'}</TableCell>
+                      <TableCell>{p.latitude.toFixed(2)}</TableCell>
+                      <TableCell>{p.longitude.toFixed(2)}</TableCell>
+                      <TableCell>{p.profile_date ? new Date(p.profile_date).toLocaleDateString() : '-'}</TableCell>
+                    </TableRow>
+                  )
+                })}
+                {!profiles?.length && (
+                  <TableRow>
+                    <TableCell colSpan={6}>No profiles found. Try adjusting filters.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </Paper>
       </Grid>
+
+      <Snackbar open={errorOpen} autoHideDuration={3000} onClose={() => setErrorOpen(false)} message="Failed to load profiles" />
     </Grid>
   )
 }
