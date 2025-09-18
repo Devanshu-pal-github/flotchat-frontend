@@ -19,7 +19,8 @@ export default function MapComponent({ data = [], selectedVariable = 'temperatur
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {onMapClick && <ClickCatcher onMapClick={onMapClick} />}
         {data.map((f) => (
-          <CircleMarker key={f.id} center={[f.lat, f.lon]} radius={6} pathOptions={{ color: '#1976d2' }} eventHandlers={{ click: ()=>onFloatSelect(f.id) }}>
+          // Use unique DB id as React key to avoid collisions across platform/cycle
+          <CircleMarker key={`marker-${f.pid ?? f.id}`} center={[f.lat, f.lon]} radius={6} pathOptions={{ color: '#1976d2' }} eventHandlers={{ click: ()=>onFloatSelect(f.pid ?? f.id) }}>
             <Popup>
               <div>
                 <div><strong>Float:</strong> {f.id}</div>

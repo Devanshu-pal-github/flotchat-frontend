@@ -3,7 +3,7 @@ import { Grid, Paper, Typography, Divider, Table, TableHead, TableRow, TableCell
 import MapComponent from '../components/visualizations/MapComponent.jsx'
 import ProfileChart from '../components/visualizations/ProfileChart.jsx'
 import ChatInterface from '../components/chat/ChatInterface.jsx'
-import { useArgoProfiles } from '../hooks/useDataQuery.js'
+import { useArgoProfiles, useProfileMeasurements } from '../hooks/useDataQuery.js'
 import { api } from '../services/api.js'
 import { useQuery } from '@tanstack/react-query'
 
@@ -44,17 +44,18 @@ export default function DashboardPage() {
   useEffect(() => { if (isError) setErrorOpen(true) }, [isError])
 
   const selectedProfile = useMemo(() => profiles.find(p => p.id === selectedId) || null, [profiles, selectedId])
+  const { data: measurements } = useProfileMeasurements(selectedId)
 
   // Map requires lat/lon keys named lat/lon
   const mapData = useMemo(() => {
     if (!profiles.length) return []
+    // Keep a human-readable label id but carry unique pid for React keys and selection
     return profiles.map(p => ({ id: `${p.platform_number}-${p.cycle_number}`, lat: p.latitude, lon: p.longitude, pid: p.id }))
   }, [profiles])
 
-  const handleFloatSelect = (floatKey) => {
-    // floatKey is platform-cycle; find matching profile by closest platform/cycle
-    const [platform, cycle] = String(floatKey).split('-')
-    const found = profiles.find(p => p.platform_number === platform && String(p.cycle_number) === cycle)
+  const handleFloatSelect = (idOrKey) => {
+    // Map now passes DB id (pid) for unambiguous selection
+    const found = profiles.find(p => p.id === idOrKey)
     if (found) setSelectedId(found.id)
   }
 
@@ -147,9 +148,17 @@ export default function DashboardPage() {
           <Divider sx={{ mb: 1, mt: 1 }} />
           {!selectedProfile ? (
             <Typography variant="body2" color="text.secondary">Select a point on the map to preview a profile.</Typography>
+          ) : !measurements ? (
+            <Typography variant="body2" color="text.secondary">Loading measurements…</Typography>
+          ) : measurements.depth?.length ? (
+            <ProfileChart data={measurements} variable="temperature" showDepth={true} />
           ) : (
-            // For P0 we still use the placeholder chart; metadata is shown above.
-            <ProfileChart data={dummyProfile} variable="temperature" showDepth={true} />
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                No measurements available for this profile. Showing a sample for demonstration.
+              </Typography>
+              <ProfileChart data={dummyProfile} variable="temperature" showDepth={true} />
+            </>
           )}
         </Paper>
       </Grid>

@@ -13,3 +13,8 @@ export async function postChatQuery(message) {
   const { data } = await api.post('/chat/query', { message })
   return data
 }
+
+export async function getProfileMeasurements(profileId) {
+  const { data } = await api.get(`/argo/profiles/${profileId}/measurements`)
+  return data
+}
