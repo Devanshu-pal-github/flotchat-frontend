@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { Box, CssBaseline, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Toolbar, Tooltip, useMediaQuery } from '@mui/material'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import InfoIcon from '@mui/icons-material/Info'
-import HomeIcon from '@mui/icons-material/Home'
 import MenuIcon from '@mui/icons-material/Menu'
 import { useTheme } from '@mui/material/styles'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -19,7 +18,6 @@ export default function SidebarLayout({ children }) {
   const { pathname } = useLocation()
 
   const items = [
-    { key: 'home', label: 'Home', icon: <HomeIcon />, to: '/' },
     { key: 'dashboard', label: 'Dashboard', icon: <DashboardIcon />, to: '/dashboard' },
     { key: 'about', label: 'About', icon: <InfoIcon />, to: '/about' },
   ]

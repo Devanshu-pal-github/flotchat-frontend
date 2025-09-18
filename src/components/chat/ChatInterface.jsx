@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Box, Paper, Typography, TextField, IconButton, Stack, CircularProgress } from '@mui/material'
+import { Box, Paper, Typography, TextField, IconButton, Stack, CircularProgress, Tooltip } from '@mui/material'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import SendIcon from '@mui/icons-material/Send'
 import { api } from '../../services/api.js'
 
@@ -38,7 +39,12 @@ export default function ChatInterface() {
 
   return (
     <Paper sx={{ p: 2 }}>
-      <Typography variant="h6" gutterBottom>FloatChat</Typography>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+        <Typography variant="h6">FloatChat</Typography>
+        <Tooltip title="Ask data questions. The assistant uses Gemini 1.5 Flash when configured.">
+          <IconButton size="small" color="inherit"><InfoOutlinedIcon fontSize="small" /></IconButton>
+        </Tooltip>
+      </Stack>
       <Box sx={{ height: 320, overflowY: 'auto', border: '1px solid #eee', p: 2, borderRadius: 1, bgcolor: 'background.default' }}>
         {messages.map((m) => <MessageBubble key={m.id} type={m.type} content={m.content} />)}
         {loading && <Stack direction="row" spacing={1} alignItems="center"><CircularProgress size={16} /><Typography variant="caption">Thinking…</Typography></Stack>}

@@ -1,3 +1,9 @@
 html, body, #root { height: 100%; margin: 0; padding: 0; }
 #root { display: flex; flex-direction: column; min-height: 100vh; }
 .leaflet-container { height: 400px; width: 100%; }
+
+/* Light pastel background to match palette (#F5EFE6) */
+body { background-color: #F5EFE6; }
+
+/* Table headers with gentle contrast */
+thead th { background-color: #E8DFCA; }
